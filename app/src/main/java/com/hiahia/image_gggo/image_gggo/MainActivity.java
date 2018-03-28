@@ -5,7 +5,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
-import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.view.Display;
 import android.view.View;
@@ -20,11 +19,11 @@ import android.widget.GridView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.lidroid.xutils.BitmapUtils;
 import com.lidroid.xutils.HttpUtils;
 import com.lidroid.xutils.exception.HttpException;
-import com.lidroid.xutils.http.RequestParams;
 import com.lidroid.xutils.http.ResponseInfo;
 import com.lidroid.xutils.http.callback.RequestCallBack;
 import com.lidroid.xutils.http.client.HttpRequest;
@@ -63,7 +62,6 @@ public class MainActivity extends AppCompatActivity {
     int pn = 0;
     String word = "美女";
     List<String> listUrl = new ArrayList<>();
-    List<String> listCurrentUrl = new ArrayList<>();//本页的
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -79,7 +77,8 @@ public class MainActivity extends AppCompatActivity {
         gvImage.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                final AlertDialog dialog = new AlertDialog.Builder(MainActivity.this).create();
+                final Dialog dialog = new Dialog(MainActivity.this, R.style.Dialog_Fullscreen);
+
 
                 PhotoView photoView = new PhotoView(MainActivity.this);
                 photoView.setOnPhotoTapListener(new PhotoViewAttacher.OnPhotoTapListener() {
@@ -93,13 +92,17 @@ public class MainActivity extends AppCompatActivity {
                         dialog.dismiss();
                     }
                 });
-                String url = parent.getItemAtPosition(position).toString();
+
+                final String url = parent.getItemAtPosition(position).toString();
+
+//                Glide.with(MainActivity.this).load(url).into(photoView);
                 bitmapUtils.display(photoView, url);
+
                 dialog.setTitle(getImgName(url));
-                dialog.setView(photoView);
+                dialog.setContentView(photoView);
                 dialog.show();
 
-                WindowManager windowManager =getWindowManager();
+                WindowManager windowManager = getWindowManager();
                 Display display = windowManager.getDefaultDisplay();
                 WindowManager.LayoutParams lp = dialog.getWindow().getAttributes();
                 lp.width = (int) (display.getWidth()); //设置宽度
@@ -107,6 +110,17 @@ public class MainActivity extends AppCompatActivity {
                 Window window = dialog.getWindow();
                 window.setAttributes(lp);
 
+
+                photoView.setOnLongClickListener(new View.OnLongClickListener() {
+                    @Override
+                    public boolean onLongClick(View v) {
+                        String label = url.substring(url.lastIndexOf("."), url.length());
+                        String name = word + "_" + System.currentTimeMillis() + label;
+                        down(url, name);
+                        Toast.makeText(getApplicationContext(), "sdcard/img_gggo/" + name, Toast.LENGTH_SHORT).show();
+                        return true;
+                    }
+                });
             }
         });
 
@@ -125,6 +139,10 @@ public class MainActivity extends AppCompatActivity {
         tvLeft.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                if (pn == 0) {
+                    Toast.makeText(getApplicationContext(), "已是第一页", Toast.LENGTH_SHORT).show();
+                    return;
+                }
                 pn = pn - 60;
                 if (pn < 0) {
                     pn = 0;
@@ -143,11 +161,11 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.bt_down).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                for (int i = 0; i < listCurrentUrl.size(); i++) {
-                    String s = listCurrentUrl.get(i);
+                for (int i = 0; i < listUrl.size(); i++) {
+                    String s = listUrl.get(i);
 
                     String label = s.substring(s.lastIndexOf("."), s.length());
-                    down(listCurrentUrl.get(i), word + "_" + pn + i + 1 + label);
+                    down(listUrl.get(i), word + "_" + pn + i + 1 + label);
                 }
             }
         });
@@ -155,12 +173,10 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    class ImageAdapter extends BaseAdapter {
+    private class ImageAdapter extends BaseAdapter {
         private Context c;
-        private List<String> listData;
 
-        public void setData(List<String> l) {
-            listData = l;
+        void setData() {
             notifyDataSetChanged();
         }
 
@@ -186,6 +202,7 @@ public class MainActivity extends AppCompatActivity {
             }
             ImageView iv = (ImageView) v.findViewById(R.id.iv);
             bitmapUtils.display(iv, listUrl.get(position));
+//            Glide.with(MainActivity.this).load(listUrl.get(position)).into(iv);
 
             return v;
         }
@@ -221,19 +238,10 @@ public class MainActivity extends AppCompatActivity {
                 String res = responseInfo.result;
                 List<String> imageUrl = getImageUrl(res);
                 List<String> imageSrc = getImageSrc(imageUrl);
-                listCurrentUrl = imageSrc;
-                System.out.println("size:" + imageSrc.size() + "  " + imageSrc);
-                listUrl.addAll(imageSrc);
-
-                adapter.setData(imageSrc);
-
-                if (listUrl.size() > 0) {
-                    pn = listUrl.size() - 1;
-                } else {
-                    pn = 0;
-                }
-
-
+                if (imageSrc != null)
+                    listUrl = imageSrc;
+                LogUtil.LogE("size:" + imageSrc.size() + "  " + imageSrc);
+                adapter.setData();
             }
 
             @Override
@@ -271,7 +279,13 @@ public class MainActivity extends AppCompatActivity {
         for (String image : listImageUrl) {
             Matcher matcher = Pattern.compile(IMGSRC_REG).matcher(image);
             while (matcher.find()) {
-                listImgSrc.add(matcher.group().substring(0, matcher.group().length() - 1));
+                String url = matcher.group().substring(0, matcher.group().length() - 1);
+//                try {
+//                    url = URLDecoder.decode(url, "UTF-8");
+//                } catch (UnsupportedEncodingException e) {
+//                    e.printStackTrace();
+//                }
+                listImgSrc.add(url);
             }
         }
         return listImgSrc;
